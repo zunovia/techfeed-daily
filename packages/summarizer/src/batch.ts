@@ -2,7 +2,7 @@ import type { ClaudeSummaryOutput, RawArticle } from '@techfeed/shared';
 import { buildUserPrompt, SYSTEM_PROMPT_BLOCK } from './prompts.js';
 
 /** Claude model used for summarization */
-const CLAUDE_MODEL = 'claude-haiku-4-5-20250514';
+const CLAUDE_MODEL = 'claude-haiku-4-5';
 
 /** Maximum tokens for summary response */
 const MAX_TOKENS = 600;
