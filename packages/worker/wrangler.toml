@@ -1,0 +1,24 @@
+name = "techfeed-daily"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+
+# Cloudflare KV namespace binding
+# Replace PLACEHOLDER_KV_NAMESPACE_ID with the actual namespace ID after creation
+[[kv_namespaces]]
+binding = "KV"
+id = "PLACEHOLDER_KV_NAMESPACE_ID"
+preview_id = "PLACEHOLDER_KV_NAMESPACE_PREVIEW_ID"
+
+# Cloudflare D1 database binding
+# Replace PLACEHOLDER_D1_DATABASE_ID with the actual database ID after creation
+[[d1_databases]]
+binding = "DB"
+database_name = "techfeed-daily"
+database_id = "PLACEHOLDER_D1_DATABASE_ID"
+
+[build]
+command = ""

@@ -1,0 +1,25 @@
+{
+	"name": "techfeed-daily",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Daily tech article aggregator with Japanese AI summaries",
+	"scripts": {
+		"build": "pnpm -r build",
+		"test": "pnpm -r test",
+		"check": "biome check .",
+		"check:fix": "biome check --fix .",
+		"typecheck": "pnpm -r typecheck",
+		"seed": "tsx scripts/seed-api-key.ts",
+		"migrate": "tsx scripts/migrate.ts"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.0",
+		"@types/node": "^20.0.0",
+		"tsx": "^4.19.0",
+		"typescript": "~5.8.0"
+	},
+	"packageManager": "pnpm@10.11.0",
+	"engines": {
+		"node": ">=20.0.0"
+	}
+}
