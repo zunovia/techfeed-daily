@@ -6,19 +6,14 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 ENVIRONMENT = "production"
 
-# Cloudflare KV namespace binding
-# Replace PLACEHOLDER_KV_NAMESPACE_ID with the actual namespace ID after creation
 [[kv_namespaces]]
 binding = "KV"
-id = "PLACEHOLDER_KV_NAMESPACE_ID"
-preview_id = "PLACEHOLDER_KV_NAMESPACE_PREVIEW_ID"
+id = "e80a7fda966d45caa629f0df14ba39f3"
 
-# Cloudflare D1 database binding
-# Replace PLACEHOLDER_D1_DATABASE_ID with the actual database ID after creation
 [[d1_databases]]
 binding = "DB"
-database_name = "techfeed-daily"
-database_id = "PLACEHOLDER_D1_DATABASE_ID"
+database_name = "techfeed-daily-db"
+database_id = "252d3a54-282d-419f-a105-b9d8e16f9ed5"
 
 [build]
 command = ""
