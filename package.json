@@ -10,7 +10,8 @@
 		"check:fix": "biome check --fix .",
 		"typecheck": "pnpm -r typecheck",
 		"seed": "tsx scripts/seed-api-key.ts",
-		"migrate": "tsx scripts/migrate.ts"
+		"migrate": "tsx scripts/migrate.ts",
+		"post-x": "tsx scripts/post-x.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.0",
