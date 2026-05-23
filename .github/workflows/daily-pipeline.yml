@@ -27,6 +27,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
 
   summarize:
     needs: collect
@@ -48,6 +49,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
           CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
 
   publish:
     needs: summarize
@@ -70,6 +72,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
           KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
 
   notify:
     needs: publish
@@ -96,8 +99,28 @@ jobs:
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
 
+  publish-zenn:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Publish to Zenn
+        run: pnpm tsx scripts/publish-zenn.ts
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+          GITHUB_TOKEN: ${{ secrets.ZENN_GITHUB_TOKEN }}
+
   notify-failure:
-    needs: [collect, summarize, publish, notify]
+    needs: [collect, summarize, publish, notify, publish-zenn]
     if: failure()
     runs-on: ubuntu-latest
     steps:

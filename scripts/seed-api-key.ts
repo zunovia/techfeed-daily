@@ -64,8 +64,10 @@ async function main(): Promise<void> {
 
 	const keyHash = createHash('sha256').update(PUBLIC_API_KEY).digest('hex');
 
+	// Mask the key in logs: show only the first 8 characters followed by asterisks
+	const maskedKey = `${PUBLIC_API_KEY.slice(0, 8)}${'*'.repeat(PUBLIC_API_KEY.length - 8)}`;
 	console.log(`Seeding public API key...`);
-	console.log(`  Key:  ${PUBLIC_API_KEY}`);
+	console.log(`  Key:  ${maskedKey}`);
 	console.log(`  Hash: ${keyHash}`);
 
 	const sql = `
