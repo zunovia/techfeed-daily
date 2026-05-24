@@ -1,7 +1,7 @@
 name: Daily Tech Article Pipeline
 on:
   schedule:
-    - cron: '0 21 * * *' # 06:00 JST
+    - cron: '0 22 * * *' # 07:00 JST
   workflow_dispatch:
     inputs:
       dry_run:
