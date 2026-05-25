@@ -85,13 +85,18 @@ export async function publish(config: PublisherConfig): Promise<void> {
 		config.cloudflareApiToken,
 	);
 
+	// Use collected_at (not published_at) as the date filter.
+	// published_at is the SOURCE article's publication date (often 1-3 days old for
+	// HN top stories), while collected_at is always the UTC timestamp of collection.
+	// Matching by collected_at within the last 24 hours ensures we publish articles
+	// that were actually collected during today's pipeline run.
 	const queryResult = await d1.execute<ArticleRow>(
 		`SELECT * FROM articles
      WHERE status = 'published'
-       AND date(published_at) = ?
+       AND collected_at >= datetime('now', '-24 hours')
      ORDER BY importance_score DESC
      LIMIT 30`,
-		[date],
+		[],
 	);
 
 	if (!queryResult.success || queryResult.result.length === 0) {
@@ -102,7 +107,7 @@ export async function publish(config: PublisherConfig): Promise<void> {
 	const rows = queryResult.result[0]?.results ?? [];
 	const articles: Article[] = rows.map(rowToArticle);
 
-	console.log(`[publisher] Fetched ${articles.length} published articles for ${date}`);
+	console.log(`[publisher] Fetched ${articles.length} published articles (collected in last 24h)`);
 
 	if (articles.length === 0) {
 		console.warn('[publisher] No published articles found — aborting');

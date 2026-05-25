@@ -122,6 +122,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
           GITHUB_TOKEN: ${{ secrets.ZENN_GITHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
 
   notify-failure:
     needs: [collect, summarize, publish, publish-zenn]
