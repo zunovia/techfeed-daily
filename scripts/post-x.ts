@@ -223,18 +223,21 @@ async function fetchTop3Articles(
 	accountId: string,
 	databaseId: string,
 	apiToken: string,
-	date: string,
+	_date: string,
 ): Promise<ArticleRow[]> {
+	// collected_at is stored in UTC. When the pipeline runs at UTC 22:00 (JST 07:00),
+	// articles are collected on the previous UTC date. Query the last 24 hours instead
+	// of matching by exact UTC date.
 	const sql = `
 		SELECT title_ja, summary_ja, importance_score
 		FROM articles
 		WHERE status = 'published'
-		  AND DATE(collected_at) = ?
+		  AND collected_at >= datetime('now', '-24 hours')
 		ORDER BY importance_score DESC
 		LIMIT 3
 	`;
 
-	const result = await queryD1<ArticleRow>(accountId, databaseId, apiToken, sql, [date]);
+	const result = await queryD1<ArticleRow>(accountId, databaseId, apiToken, sql, []);
 
 	if (!result.success) {
 		const msgs = result.errors.map((e) => `[${e.code}] ${e.message}`).join(', ');

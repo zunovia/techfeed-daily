@@ -51,15 +51,19 @@ function rowToArticle(row: ArticleRow): Article {
 }
 
 async function fetchRssFromD1(db: D1Database, date: string, baseUrl: string): Promise<string> {
+	// Use collected_at (not published_at) as the date filter.
+	// published_at is the SOURCE article's publication date (often 1-3 days old for
+	// HN top stories), while collected_at is always the UTC timestamp of collection.
+	// Matching by collected_at within the last 24 hours ensures we return articles
+	// that were actually collected during today's pipeline run.
 	const { results } = await db
 		.prepare(
 			`SELECT * FROM articles
        WHERE status = 'published'
-         AND date(published_at) = ?
+         AND collected_at >= datetime('now', '-24 hours')
        ORDER BY importance_score DESC
        LIMIT 30`,
 		)
-		.bind(date)
 		.all<ArticleRow>();
 
 	const articles = (results ?? []).map(rowToArticle);

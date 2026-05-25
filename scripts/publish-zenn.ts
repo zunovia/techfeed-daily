@@ -250,7 +250,6 @@ async function fetchTopArticles(
 	accountId: string,
 	databaseId: string,
 	apiToken: string,
-	date: string,
 ): Promise<ArticleRow[]> {
 	// collected_at is stored in UTC. When the pipeline runs at UTC 22:00 (JST 07:00),
 	// articles are collected on the previous UTC date. Query the last 24 hours instead
@@ -264,9 +263,7 @@ async function fetchTopArticles(
 		LIMIT ?
 	`;
 
-	const result = await queryD1<ArticleRow>(accountId, databaseId, apiToken, sql, [
-		MAX_ARTICLES,
-	]);
+	const result = await queryD1<ArticleRow>(accountId, databaseId, apiToken, sql, [MAX_ARTICLES]);
 
 	if (!result.success) {
 		const msgs = result.errors.map((e) => `[${e.code}] ${e.message}`).join(', ');
@@ -317,7 +314,7 @@ async function runDryRun(): Promise<void> {
 
 	if (accountId && apiToken && databaseId) {
 		console.log(`[DRY_RUN] Fetching top ${MAX_ARTICLES} articles for ${today}...`);
-		articles = await fetchTopArticles(accountId, databaseId, apiToken, today);
+		articles = await fetchTopArticles(accountId, databaseId, apiToken);
 	} else {
 		console.log('[DRY_RUN] No D1 credentials — using placeholder data.');
 		articles = PLACEHOLDER_ARTICLES;
@@ -370,7 +367,7 @@ async function runProduction(): Promise<void> {
 	console.log(`Fetching top ${MAX_ARTICLES} articles for ${today}...`);
 
 	// biome-ignore lint/style/noNonNullAssertion: checked above
-	const articles = await fetchTopArticles(accountId!, databaseId!, apiToken!, today);
+	const articles = await fetchTopArticles(accountId!, databaseId!, apiToken!);
 
 	if (articles.length === 0) {
 		console.log('No published articles found for today. Skipping Zenn publish.');
