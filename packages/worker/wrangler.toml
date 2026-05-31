@@ -15,5 +15,9 @@ binding = "DB"
 database_name = "techfeed-daily-db"
 database_id = "252d3a54-282d-419f-a105-b9d8e16f9ed5"
 
+# Workers AI — used for the hero image generation (/img/hero/:date)
+[ai]
+binding = "AI"
+
 [build]
 command = ""

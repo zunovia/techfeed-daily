@@ -8,5 +8,7 @@
 export interface WorkerEnv {
 	DB: D1Database;
 	KV: KVNamespace;
+	/** Workers AI binding (optional — used for hero image generation). */
+	AI?: Ai;
 	ENVIRONMENT: 'production' | 'staging';
 }

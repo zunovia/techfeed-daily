@@ -55,9 +55,11 @@ async function lookupApiKey(
  * Public paths (defined below) are allowed through without a key.
  * All other paths require a valid X-API-Key header.
  */
-const PUBLIC_PATHS = ['/rss', '/api/articles', '/api/health'];
+const PUBLIC_PATHS = ['/rss', '/api/articles', '/api/health', '/img', '/d'];
 
 function isPublicPath(path: string): boolean {
+	// The site homepage ("/") is always public.
+	if (path === '/') return true;
 	return PUBLIC_PATHS.some(
 		(p) => path === p || path.startsWith(`${p}/`) || path.startsWith(`${p}?`),
 	);

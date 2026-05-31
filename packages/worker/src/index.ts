@@ -4,7 +4,9 @@ import { corsMiddleware } from './middleware/cors.js';
 import { rateLimitMiddleware } from './middleware/rate-limit.js';
 import { articles } from './routes/articles.js';
 import { health } from './routes/health.js';
+import { image } from './routes/image.js';
 import { rss } from './routes/rss.js';
+import { site } from './routes/site.js';
 import type { WorkerEnv } from './types.js';
 
 const app = new Hono<{ Bindings: WorkerEnv }>();
@@ -18,6 +20,9 @@ app.use('*', rateLimitMiddleware);
 app.route('/rss', rss);
 app.route('/api/articles', articles);
 app.route('/api/health', health);
+app.route('/img', image);
+// Human-readable site (mounted last; owns "/" and "/d/:date")
+app.route('/', site);
 
 // 404 fallback
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
