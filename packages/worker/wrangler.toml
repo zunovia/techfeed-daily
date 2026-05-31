@@ -3,6 +3,10 @@ main = "src/index.ts"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Keep the original *.workers.dev URL enabled (adding `routes` disables it by default,
+# which would break existing RSS/API consumers and Zenn article links).
+workers_dev = true
+
 # Custom domain — serves the site at news.surc.online (apex surc.online stays on Vercel).
 # Requires the surc.online zone to live in the same Cloudflare account as this Worker
 # and the deploy API token to have Zone DNS + Workers Routes edit permissions.
