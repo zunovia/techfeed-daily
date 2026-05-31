@@ -18,6 +18,9 @@ const site = new Hono<{ Bindings: WorkerEnv }>();
 
 const SITE_NAME = 'TechFeed Daily';
 const SITE_TAGLINE = '海外テックニュースを毎日、日本語で。';
+// 親サイト（運営元ホームページ）。各ページ上部・下部の「戻る」導線のリンク先。
+const HOME_URL = 'https://surc.online/';
+const HOME_LABEL = 'Sur Communication';
 
 // ---------------------------------------------------------------------------
 // Data access
@@ -349,10 +352,21 @@ h1{margin:4px 0 2px;font-size:28px;line-height:1.3}
 .muted{color:var(--muted);font-size:14px}
 footer{text-align:center;color:var(--muted);font-size:12px;padding:32px 16px;border-top:1px solid var(--border);margin-top:32px}
 footer a{color:var(--muted)}
+.topbar{position:sticky;top:0;z-index:50;background:rgba(15,23,42,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--border);padding:10px 16px}
+.topbar .wrap{padding:0;display:flex;align-items:center}
+.topbar a{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--accent)}
+.backbtn{display:inline-flex;align-items:center;gap:8px;margin:24px 0 0;padding:10px 16px;background:var(--panel);border:1px solid var(--border);border-radius:999px;font-weight:700;font-size:14px;color:var(--accent)}
+.backbtn:hover{border-color:var(--accent)}
+.backbar{text-align:center;padding:8px 16px 0}
 @media(max-width:640px){.dashboard{grid-template-columns:1fr}h1{font-size:22px}.hero-img{height:180px}}
 </style>
 </head>
 <body>
+<div class="topbar">
+  <div class="wrap">
+    <a href="${HOME_URL}">← ${HOME_LABEL}（ホーム）に戻る</a>
+  </div>
+</div>
 <header class="hero">
   <img class="hero-img" src="/img/hero/${esc(date)}" alt="" loading="eager" onerror="this.style.display='none'">
   <div class="hero-overlay">
@@ -366,6 +380,9 @@ footer a{color:var(--muted)}
 </header>
 <main class="wrap">
   ${body}
+  <div class="backbar">
+    <a class="backbtn" href="${HOME_URL}">← ${HOME_LABEL}（ホームページ）に戻る</a>
+  </div>
 </main>
 <footer>
   <p>${SITE_NAME} — 毎朝7時(JST)に自動更新 / <a href="/rss">RSS</a> ・ <a href="/api/articles">API</a></p>
