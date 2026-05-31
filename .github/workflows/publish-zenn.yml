@@ -1,6 +1,11 @@
 name: Publish to Zenn
 
+# 毎朝、その日の記事を zenn-content リポジトリへ自動送信する（＝Step1を自動化）。
+# Zenn上での公開(Deploy)は手動運用のまま（ダッシュボードでDeployボタンを押す）。
+# 1日1回のみ送信するのでZennのレート制限に優しい。手動実行(workflow_dispatch)も可。
 on:
+  schedule:
+    - cron: '30 22 * * *' # 07:30 JST（日次パイプライン完了後）
   workflow_dispatch:
 
 jobs:
