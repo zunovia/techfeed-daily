@@ -7,6 +7,12 @@ on:
       - 'packages/shared/**'
   workflow_dispatch:
 
+# 連続pushで走行中の旧デプロイを自動キャンセルし、最新コードだけを確実にデプロイする。
+# 並行 wrangler deploy の競合（前回runがエラーになる不具合）を防止。
+concurrency:
+  group: deploy-worker-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
