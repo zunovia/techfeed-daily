@@ -106,11 +106,14 @@ function formatDateSlash(date: string): string {
 
 const MAX_ARTICLES = 10;
 const SITE_URL = 'https://techfeed-daily.kaneda-ryota.workers.dev';
+// 単一記事を毎日「更新」する（Zennのレート制限は新規投稿のみ対象で、更新は対象外）。
+// これにより構造的にレート制限エラーが起きない。スラッグは固定（12〜50字の制約を満たす）。
+const ZENN_SLUG = 'techfeed-daily';
 
 function buildFrontmatter(date: string): string {
 	const lines = [
 		'---',
-		`title: "【自動配信】海外テックニュース日本語まとめ ${formatDateSlash(date)}"`,
+		`title: "【毎日更新】海外テックニュース日本語まとめ｜最終更新 ${formatDateSlash(date)}"`,
 		'emoji: "📰"',
 		'type: "tech"',
 		'topics: ["tech", "ai", "海外テック", "ニュース"]',
@@ -243,6 +246,44 @@ async function putFileToGitHub(
 }
 
 // ---------------------------------------------------------------------------
+// Zenn publish verification
+// Zenn には「デプロイ成否を返すAPI」が無いため、公開記事URLの到達確認で代替する。
+// ZENN_USERNAME が設定されている場合のみ実行（未設定ならスキップ）。
+// ---------------------------------------------------------------------------
+
+async function verifyZennPublished(slug: string): Promise<void> {
+	const user = process.env.ZENN_USERNAME;
+	if (!user) {
+		console.log(
+			'ZENN_USERNAME未設定のため公開URL検証はスキップ（更新方式のためレート制限リスクは無し）。',
+		);
+		return;
+	}
+
+	const url = `https://zenn.dev/${user}/articles/${slug}`;
+	const maxAttempts = 5;
+
+	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+		// Zennのデプロイ反映を待つ（指数的でなく一定間隔のバックオフ）
+		await new Promise((resolve) => setTimeout(resolve, 20_000));
+		try {
+			const res = await fetch(url, { method: 'GET' });
+			if (res.ok) {
+				console.log(`公開確認OK (${res.status}): ${url}`);
+				return;
+			}
+			console.log(`公開確認 試行${attempt}/${maxAttempts}: 未公開 (${res.status})`);
+		} catch (err) {
+			console.log(`公開確認 試行${attempt}/${maxAttempts}: 取得失敗`, err);
+		}
+	}
+
+	throw new Error(
+		`Zenn公開URLの確認に失敗しました: ${url}（Zennダッシュボードのデプロイ履歴を確認してください）`,
+	);
+}
+
+// ---------------------------------------------------------------------------
 // D1 fetch helper
 // ---------------------------------------------------------------------------
 
@@ -326,7 +367,7 @@ async function runDryRun(): Promise<void> {
 	}
 
 	const articleContent = composeZennArticle(today, articles);
-	const filePath = `articles/techfeed-daily-${today}.md`;
+	const filePath = `articles/${ZENN_SLUG}.md`;
 
 	console.log(`\n[DRY_RUN] File path: ${filePath}`);
 	console.log('[DRY_RUN] Article content:');
@@ -377,7 +418,7 @@ async function runProduction(): Promise<void> {
 	console.log(`Found ${articles.length} articles.`);
 
 	const articleContent = composeZennArticle(today, articles);
-	const filePath = `articles/techfeed-daily-${today}.md`;
+	const filePath = `articles/${ZENN_SLUG}.md`;
 
 	console.log(`Publishing to Zenn (${zennRepo})...`);
 	console.log(`File: ${filePath}`);
@@ -388,10 +429,11 @@ async function runProduction(): Promise<void> {
 		articleContent,
 		// biome-ignore lint/style/noNonNullAssertion: checked above
 		githubToken!,
-		`chore: add TechFeed Daily ${today}`,
+		`chore: update TechFeed Daily digest ${today}`,
 	);
 
-	console.log('Zenn article published successfully.');
+	console.log('Zenn article updated successfully.');
+	await verifyZennPublished(ZENN_SLUG);
 }
 
 // ---------------------------------------------------------------------------

@@ -8,6 +8,11 @@ on:
     - cron: '30 22 * * *' # 07:30 JST（日次パイプライン完了後）
   workflow_dispatch:
 
+# 連続実行・多重起動を防ぐ（1日1回・確実投稿のため）
+concurrency:
+  group: publish-zenn-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   publish-zenn:
     runs-on: ubuntu-latest
@@ -27,3 +32,5 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
           GITHUB_TOKEN: ${{ secrets.ZENN_GITHUB_TOKEN }}
+          # 公開URL検証用（任意）。リポジトリ変数 ZENN_USERNAME を設定すると有効化。
+          ZENN_USERNAME: ${{ vars.ZENN_USERNAME }}
