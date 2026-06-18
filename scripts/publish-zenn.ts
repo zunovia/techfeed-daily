@@ -105,7 +105,9 @@ function formatDateSlash(date: string): string {
 // ---------------------------------------------------------------------------
 
 const MAX_ARTICLES = 10;
-const SITE_URL = 'https://techfeed-daily.kaneda-ryota.workers.dev';
+// 配信の主軸＝カスタムドメイン（news.surc.online）。workers.dev も並行稼働中だが、
+// Zenn記事からの誘導は主軸サイトに向ける。/archive で過去の日次まとめ一覧を表示。
+const SITE_URL = 'https://news.surc.online';
 // 単一記事を毎日「更新」する（Zennのレート制限は新規投稿のみ対象で、更新は対象外）。
 // これにより構造的にレート制限エラーが起きない。スラッグは固定（12〜50字の制約を満たす）。
 const ZENN_SLUG = 'techfeed-daily';
@@ -127,7 +129,8 @@ function buildArticleBody(articles: ArticleRow[]): string {
 	const lines: string[] = [
 		'## 今日のハイライト',
 		'',
-		`> 本記事は [TechFeed Daily](${SITE_URL}) が自動生成しています。`,
+		`> 本記事は [TechFeed Daily](${SITE_URL}) が自動生成しています。この記事は毎日、最新のまとめに更新されます。`,
+		`> 📚 過去の日次まとめは **[アーカイブ一覧](${SITE_URL}/archive)** からご覧いただけます。`,
 		'',
 		'---',
 		'',
@@ -159,6 +162,10 @@ function buildArticleBody(articles: ArticleRow[]): string {
 
 	lines.push('*この記事は TechFeed Daily により自動生成されました。*');
 	lines.push('*海外テックニュースを毎日自動で収集・要約・配信しています。*');
+	lines.push('');
+	lines.push(
+		`📚 **過去のまとめを読む** → [アーカイブ一覧](${SITE_URL}/archive)　｜　🌐 [最新版サイト](${SITE_URL})`,
+	);
 
 	return lines.join('\n');
 }

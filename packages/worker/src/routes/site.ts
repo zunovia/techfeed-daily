@@ -21,6 +21,9 @@ const SITE_TAGLINE = '海外テックニュースを毎日、日本語で。';
 // 親サイト（運営元ホームページ）。各ページ上部・下部の「戻る」導線のリンク先。
 const HOME_URL = 'https://surc.online/';
 const HOME_LABEL = 'Sur Communication';
+// 1日(=1ページ)あたりに表示する記事の上限。一覧の「件数」表示と /d/:date の取得数を
+// この1か所で揃え、一覧と詳細で件数がズレないようにする。
+const DAILY_LIMIT = 30;
 
 // ---------------------------------------------------------------------------
 // Data access
@@ -84,7 +87,7 @@ async function fetchLatest(db: D1Database): Promise<SiteArticle[]> {
        WHERE status = 'published'
          AND collected_at >= datetime('now', '-24 hours')
        ORDER BY importance_score DESC
-       LIMIT 30`,
+       LIMIT ${DAILY_LIMIT}`,
 		)
 		.all<ArticleRow>();
 	return (results ?? []).map(rowToSiteArticle);
@@ -100,11 +103,35 @@ async function fetchByDate(db: D1Database, date: string): Promise<SiteArticle[]>
        WHERE status = 'published'
          AND date(collected_at) = ?
        ORDER BY importance_score DESC
-       LIMIT 30`,
+       LIMIT ${DAILY_LIMIT}`,
 		)
 		.bind(date)
 		.all<ArticleRow>();
 	return (results ?? []).map(rowToSiteArticle);
+}
+
+interface ArchiveDay {
+	date: string;
+	count: number;
+}
+
+/**
+ * Distinct UTC dates that have published articles, newest first, with counts.
+ * Grouped by date(collected_at) — the SAME bucketing used by /d/:date — so every
+ * listed day is guaranteed to render a non-empty archive page.
+ */
+async function fetchArchiveDates(db: D1Database): Promise<ArchiveDay[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT date(collected_at) AS date, COUNT(*) AS count
+       FROM articles
+       WHERE status = 'published'
+       GROUP BY date(collected_at)
+       ORDER BY date(collected_at) DESC
+       LIMIT 120`,
+		)
+		.all<ArchiveDay>();
+	return (results ?? []).filter((r) => typeof r.date === 'string' && r.date.length === 10);
 }
 
 // ---------------------------------------------------------------------------
@@ -365,6 +392,7 @@ footer a{color:var(--muted)}
 <div class="topbar">
   <div class="wrap">
     <a href="${HOME_URL}">← ${HOME_LABEL}（ホーム）に戻る</a>
+    <a href="/archive" style="margin-left:auto">📚 アーカイブ</a>
   </div>
 </div>
 <header class="hero">
@@ -385,7 +413,101 @@ footer a{color:var(--muted)}
   </div>
 </main>
 <footer>
-  <p>${SITE_NAME} — 毎朝7時(JST)に自動更新 / <a href="/rss">RSS</a> ・ <a href="/api/articles">API</a></p>
+  <p>${SITE_NAME} — 毎朝7時(JST)に自動更新 / <a href="/archive">📚 アーカイブ</a> ・ <a href="/rss">RSS</a> ・ <a href="/api/articles">API</a></p>
+  <p>本サイトはAIにより自動収集・要約・配信されています。</p>
+</footer>
+</body>
+</html>`;
+}
+
+/** Archive index — lists every day that has articles, linking to /d/:date. */
+function renderArchivePage(dates: ArchiveDay[]): string {
+	const totalDays = dates.length;
+	// Cap each day's count to DAILY_LIMIT so the listed number matches what the
+	// /d/:date page actually renders (which is limited to DAILY_LIMIT articles).
+	const shown = (n: number) => Math.min(n, DAILY_LIMIT);
+	const totalArticles = dates.reduce((s, d) => s + shown(d.count), 0);
+
+	const items = dates
+		.map(
+			(d) => `
+      <a class="arch-item" href="/d/${esc(d.date)}">
+        <span class="arch-date">${esc(formatDateJa(d.date))}</span>
+        <span class="arch-count">${shown(d.count)}<small>件</small></span>
+      </a>`,
+		)
+		.join('');
+
+	const body =
+		totalDays === 0
+			? `<div class="empty"><p>📭 まだアーカイブがありません。</p>
+         <p class="muted">毎朝7時（JST）に最初の記事が配信されると、ここに日別の一覧が並びます。</p></div>`
+			: `<section class="arch-grid">${items}</section>`;
+
+	return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${SITE_NAME} — アーカイブ</title>
+<meta name="description" content="${SITE_TAGLINE} 過去の海外テックニュース日本語まとめを日付別に一覧できます。">
+<meta property="og:title" content="${SITE_NAME} — アーカイブ">
+<meta property="og:description" content="${SITE_TAGLINE}">
+<meta property="og:type" content="website">
+<link rel="alternate" type="application/rss+xml" title="${SITE_NAME} RSS" href="/rss">
+<style>
+:root{--bg:#0f172a;--panel:#1e293b;--text:#e2e8f0;--muted:#94a3b8;--accent:#38bdf8;--border:#334155}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic UI",sans-serif;line-height:1.7}
+a{color:var(--accent);text-decoration:none}
+.wrap{max-width:880px;margin:0 auto;padding:0 16px 64px}
+.topbar{position:sticky;top:0;z-index:50;background:rgba(15,23,42,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--border);padding:10px 16px}
+.topbar .wrap{padding:0;display:flex;align-items:center}
+.topbar a{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--accent)}
+header.hero{background:linear-gradient(135deg,#0ea5e9,#6366f1,#a855f7);padding:32px 16px}
+header.hero .wrap{padding-bottom:0}
+.brand{font-size:14px;letter-spacing:.15em;color:#e0f2fe;font-weight:700;text-transform:uppercase}
+h1{margin:6px 0 4px;font-size:26px;line-height:1.3}
+.tagline{color:#bae6fd;font-size:13px}
+.summary-line{color:var(--muted);font-size:13px;margin:20px 0 8px}
+.arch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:12px}
+.arch-item{display:flex;justify-content:space-between;align-items:center;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .2s,transform .1s}
+.arch-item:hover{border-color:var(--accent);transform:translateY(-1px)}
+.arch-date{font-weight:700;font-size:15px;color:var(--text)}
+.arch-count{font-weight:800;font-size:18px;color:var(--accent)}
+.arch-count small{font-size:11px;color:var(--muted);margin-left:2px;font-weight:600}
+.empty{text-align:center;padding:64px 16px}
+.muted{color:var(--muted);font-size:14px}
+.backbtn{display:inline-flex;align-items:center;gap:8px;margin:24px 0 0;padding:10px 16px;background:var(--panel);border:1px solid var(--border);border-radius:999px;font-weight:700;font-size:14px;color:var(--accent)}
+.backbtn:hover{border-color:var(--accent)}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:32px 16px;border-top:1px solid var(--border);margin-top:32px}
+footer a{color:var(--muted)}
+@media(max-width:640px){h1{font-size:22px}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="wrap">
+    <a href="/">← 最新のまとめに戻る</a>
+    <a href="${HOME_URL}" style="margin-left:auto">${HOME_LABEL}（ホーム）</a>
+  </div>
+</div>
+<header class="hero">
+  <div class="wrap">
+    <div class="brand">${SITE_NAME}</div>
+    <h1>📚 日次アーカイブ</h1>
+    <div class="tagline">${SITE_TAGLINE}</div>
+  </div>
+</header>
+<main class="wrap">
+  ${totalDays > 0 ? `<p class="summary-line">${totalDays}日分・累計${totalArticles}記事を配信。日付をタップするとその日のまとめを表示します。</p>` : ''}
+  ${body}
+  <div style="text-align:center">
+    <a class="backbtn" href="/">← 最新のまとめへ</a>
+  </div>
+</main>
+<footer>
+  <p>${SITE_NAME} — 毎朝7時(JST)に自動更新 / <a href="/">最新</a> ・ <a href="/rss">RSS</a> ・ <a href="/api/articles">API</a></p>
   <p>本サイトはAIにより自動収集・要約・配信されています。</p>
 </footer>
 </body>
@@ -405,6 +527,17 @@ site.get('/', async (c) => {
 	} catch (err) {
 		console.error('[site] failed to render home:', err);
 		return c.html(renderPage(todayJst(), []), 200);
+	}
+});
+
+/** GET /archive — index of all days that have articles. */
+site.get('/archive', async (c) => {
+	try {
+		const dates = await fetchArchiveDates(c.env.DB);
+		return c.html(renderArchivePage(dates));
+	} catch (err) {
+		console.error('[site] failed to render archive:', err);
+		return c.html(renderArchivePage([]), 200);
 	}
 });
 
