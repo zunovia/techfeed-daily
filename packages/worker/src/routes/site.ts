@@ -24,6 +24,9 @@ const HOME_LABEL = 'Sur Communication';
 // 1日(=1ページ)あたりに表示する記事の上限。一覧の「件数」表示と /d/:date の取得数を
 // この1か所で揃え、一覧と詳細で件数がズレないようにする。
 const DAILY_LIMIT = 30;
+// Cloudflare Web Analytics（cookieなし・プライバシー重視）。token はクライアント側に
+// 露出する公開ビーコンID（秘密情報ではない）。全ページの </body> 直前に挿入する。
+const WEB_ANALYTICS = `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "6aaf33a0aaef474595bbaba144a2a3f8"}'></script>`;
 
 // ---------------------------------------------------------------------------
 // Data access
@@ -416,6 +419,7 @@ footer a{color:var(--muted)}
   <p>${SITE_NAME} — 毎朝7時(JST)に自動更新 / <a href="/archive">📚 アーカイブ</a> ・ <a href="/rss">RSS</a> ・ <a href="/api/articles">API</a></p>
   <p>本サイトはAIにより自動収集・要約・配信されています。</p>
 </footer>
+${WEB_ANALYTICS}
 </body>
 </html>`;
 }
@@ -510,6 +514,7 @@ footer a{color:var(--muted)}
   <p>${SITE_NAME} — 毎朝7時(JST)に自動更新 / <a href="/">最新</a> ・ <a href="/rss">RSS</a> ・ <a href="/api/articles">API</a></p>
   <p>本サイトはAIにより自動収集・要約・配信されています。</p>
 </footer>
+${WEB_ANALYTICS}
 </body>
 </html>`;
 }
