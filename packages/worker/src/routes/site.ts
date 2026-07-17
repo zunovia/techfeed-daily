@@ -18,6 +18,9 @@ const site = new Hono<{ Bindings: WorkerEnv }>();
 
 const SITE_NAME = 'TechFeed Daily';
 const SITE_TAGLINE = '海外テックニュースを毎日、日本語で。';
+// 正規URL。workers.dev とカスタムドメインの両方で配信しているため、
+// canonical・JSON-LD・sitemap は必ずこちらへ正規化する（AI/検索エンジンの同一性統合）。
+const SITE_URL = 'https://news.surc.online';
 // 親サイト（運営元ホームページ）。各ページ上部・下部の「戻る」導線のリンク先。
 const HOME_URL = 'https://surc.online/';
 const HOME_LABEL = 'Sur Communication';
@@ -251,6 +254,40 @@ function aggregateTags(articles: SiteArticle[]): Array<{ tag: string; count: num
 }
 
 // ---------------------------------------------------------------------------
+// Structured data (JSON-LD)
+// ---------------------------------------------------------------------------
+
+/**
+ * Organization + WebSite の JSON-LD。AI・検索エンジンに「何のサイトで誰が運営しているか」を
+ * 機械可読で宣言する（サイトの素性情報不足によるAI側の誤認・風評の一次対策）。
+ */
+function jsonLd(): string {
+	const data = {
+		'@context': 'https://schema.org',
+		'@graph': [
+			{
+				'@type': 'Organization',
+				'@id': `${HOME_URL}#org`,
+				name: HOME_LABEL,
+				url: HOME_URL,
+			},
+			{
+				'@type': 'WebSite',
+				'@id': `${SITE_URL}/#website`,
+				name: SITE_NAME,
+				alternateName: 'news.surc.online',
+				url: `${SITE_URL}/`,
+				description:
+					'海外テックニュースを毎日、日本語で。Hacker News・DEV.to・GitHub Trending から自動収集した記事をAIが要約し、毎朝7時(JST)に配信するニュースメディア。',
+				inLanguage: 'ja',
+				publisher: { '@id': `${HOME_URL}#org` },
+			},
+		],
+	};
+	return `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
+}
+
+// ---------------------------------------------------------------------------
 // HTML rendering
 // ---------------------------------------------------------------------------
 
@@ -284,7 +321,7 @@ function renderArticleCard(a: SiteArticle, rank: number): string {
     </article>`;
 }
 
-function renderPage(date: string, articles: SiteArticle[]): string {
+function renderPage(date: string, articles: SiteArticle[], canonicalPath = '/'): string {
 	const dateJa = formatDateJa(date);
 	const tagStats = aggregateTags(articles);
 	const avgScore =
@@ -336,7 +373,10 @@ function renderPage(date: string, articles: SiteArticle[]): string {
 <meta property="og:image" content="/img/hero/${esc(date)}">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="${SITE_URL}${esc(canonicalPath)}">
 <link rel="alternate" type="application/rss+xml" title="${SITE_NAME} RSS" href="/rss">
+<link rel="sitemap" type="application/xml" href="/sitemap.xml">
+${jsonLd()}
 <style>
 :root{--bg:#0f172a;--panel:#1e293b;--card:#1e293b;--text:#e2e8f0;--muted:#94a3b8;--accent:#38bdf8;--border:#334155}
 *{box-sizing:border-box}
@@ -458,7 +498,10 @@ function renderArchivePage(dates: ArchiveDay[]): string {
 <meta property="og:title" content="${SITE_NAME} — アーカイブ">
 <meta property="og:description" content="${SITE_TAGLINE}">
 <meta property="og:type" content="website">
+<link rel="canonical" href="${SITE_URL}/archive">
 <link rel="alternate" type="application/rss+xml" title="${SITE_NAME} RSS" href="/rss">
+<link rel="sitemap" type="application/xml" href="/sitemap.xml">
+${jsonLd()}
 <style>
 :root{--bg:#0f172a;--panel:#1e293b;--text:#e2e8f0;--muted:#94a3b8;--accent:#38bdf8;--border:#334155}
 *{box-sizing:border-box}
@@ -554,11 +597,48 @@ site.get('/d/:date', async (c) => {
 	}
 	try {
 		const articles = await fetchByDate(c.env.DB, date);
-		return c.html(renderPage(date, articles));
+		return c.html(renderPage(date, articles, `/d/${date}`));
 	} catch (err) {
 		console.error(`[site] failed to render date=${date}:`, err);
-		return c.html(renderPage(date, []), 200);
+		return c.html(renderPage(date, [], `/d/${date}`), 200);
 	}
+});
+
+/** GET /robots.txt — 全ボット許可を明示し、sitemapの場所を宣言する。 */
+site.get('/robots.txt', (c) => {
+	const body = `User-agent: *\nAllow: /\n\nSitemap: ${SITE_URL}/sitemap.xml\n`;
+	return c.text(body, 200, { 'cache-control': 'public, max-age=3600' });
+});
+
+/** GET /sitemap.xml — トップ・アーカイブ・日別ページをD1の実データから列挙する。 */
+site.get('/sitemap.xml', async (c) => {
+	let days: ArchiveDay[] = [];
+	try {
+		days = await fetchArchiveDates(c.env.DB);
+	} catch (err) {
+		console.error('[site] sitemap: failed to fetch dates:', err);
+	}
+	const staticUrls = [
+		{ loc: `${SITE_URL}/`, lastmod: todayJst(), freq: 'daily' },
+		{ loc: `${SITE_URL}/archive`, lastmod: todayJst(), freq: 'daily' },
+	];
+	// 過去日のページは配信後に変化しないため changefreq=never でクローラー負荷を抑える
+	const dayUrls = days.map((d) => ({
+		loc: `${SITE_URL}/d/${d.date}`,
+		lastmod: d.date,
+		freq: 'never',
+	}));
+	const urls = [...staticUrls, ...dayUrls]
+		.map(
+			(u) =>
+				`  <url><loc>${u.loc}</loc><lastmod>${u.lastmod}</lastmod><changefreq>${u.freq}</changefreq></url>`,
+		)
+		.join('\n');
+	const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
+	return c.body(xml, 200, {
+		'content-type': 'application/xml; charset=utf-8',
+		'cache-control': 'public, max-age=3600',
+	});
 });
 
 export { site };
