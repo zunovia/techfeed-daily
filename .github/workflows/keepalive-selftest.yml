@@ -1,0 +1,36 @@
+# 一時的な検証用。keepalive の式と push 経路を確認したら削除する。
+name: Keepalive Selftest
+on:
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    if: github.repository == 'zunovia/techfeed-daily'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Measure how long the repository has been idle
+        id: idle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pushed=$(gh api "repos/${{ github.repository }}" --jq .pushed_at)
+          age=$(( ( $(date +%s) - $(date -d "$pushed" +%s) ) / 86400 ))
+          echo "last push: $pushed (${age} days ago)"
+          echo "age=$age" >> "$GITHUB_OUTPUT"
+
+      # 本番のしきい値は 45。ここでは push 経路を通すため 0 にしている。
+      - uses: actions/checkout@v4
+        if: fromJSON(steps.idle.outputs.age) >= 0
+
+      - name: Push an empty commit to reset the 60-day timer
+        if: fromJSON(steps.idle.outputs.age) >= 0
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit --allow-empty -m 'chore: keepalive selftest (empty commit)'
+          git push
