@@ -118,3 +118,42 @@ jobs:
             -d "{\"text\":\"TechFeed Daily pipeline failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # ── keepalive ────────────────────────────────────────────────────────────
+  # 公開リポジトリのスケジュール実行は、60日間コミットが無いと GitHub が自動で
+  # 無効化する。止まるのは Zenn だけでなく、この日次パイプライン本体も同じ。
+  # 45日を超えていたら空コミットを1つ積んでカウンタを戻す（15日の余裕を見る）。
+  #
+  # - パイプラインの成否と切り離してある（needs 無し）。失敗が続いている時こそ止めたくない
+  # - GITHUB_TOKEN による push は on:push のワークフローを起動しないため、
+  #   Deploy Worker が誤って走ることはない（空コミットなので paths にも当たらない）
+  # - リポジトリ既定のトークン権限が read のため、ここで contents: write を明示する
+  keepalive:
+    if: github.repository == 'zunovia/techfeed-daily'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Measure how long the repository has been idle
+        id: idle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pushed=$(gh api "repos/${{ github.repository }}" --jq .pushed_at)
+          age=$(( ( $(date +%s) - $(date -d "$pushed" +%s) ) / 86400 ))
+          echo "last push: $pushed (${age} days ago)"
+          echo "age=$age" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: fromJSON(steps.idle.outputs.age) >= 45
+
+      - name: Push an empty commit to reset the 60-day timer
+        if: fromJSON(steps.idle.outputs.age) >= 45
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit --allow-empty -m 'chore: keepalive (scheduled workflows are disabled after 60 days idle)'
+          git push
