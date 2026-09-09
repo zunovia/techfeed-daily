@@ -1,7 +1,8 @@
 name: CI
 on:
   push:
-    branches: [main]
+    # 既定ブランチは master。[main] のままでは push で一度も動かなかった。
+    branches: [master]
   pull_request:
 
 jobs:
