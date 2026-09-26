@@ -20,6 +20,16 @@ app.use('*', authMiddleware);
 // サイト本体は Cloudflare のエッジが前段にあり、KV で数える意味がない。
 app.use('/api/*', rateLimitMiddleware);
 
+// RSS と API は検索結果に載せない。XML/JSON なので載る性質のものではなく、
+// 放置すると Search Console に「クロール済み・インデックス未登録」として残り続ける。
+const noindex = async (c: { header: (k: string, v: string) => void }, next: () => Promise<void>) => {
+	await next();
+	c.header('X-Robots-Tag', 'noindex');
+};
+app.use('/rss', noindex);
+app.use('/rss/*', noindex);
+app.use('/api/*', noindex);
+
 // Routes
 app.route('/rss', rss);
 app.route('/api/articles', articles);

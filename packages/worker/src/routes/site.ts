@@ -604,9 +604,10 @@ site.get('/d/:date', async (c) => {
 	}
 });
 
-/** GET /robots.txt — 全ボット許可を明示し、sitemapの場所を宣言する。 */
+/** GET /robots.txt — HTML は許可、JSON API はクロール対象から外し、sitemapの場所を宣言する。
+ *  /rss は Disallow にしない（Disallow だとクローラが noindex ヘッダを読みに来られない）。 */
 site.get('/robots.txt', (c) => {
-	const body = `User-agent: *\nAllow: /\n\nSitemap: ${SITE_URL}/sitemap.xml\n`;
+	const body = `User-agent: *\nDisallow: /api/\nAllow: /\n\nSitemap: ${SITE_URL}/sitemap.xml\n`;
 	return c.text(body, 200, { 'cache-control': 'public, max-age=3600' });
 });
 
