@@ -14,7 +14,11 @@ const app = new Hono<{ Bindings: WorkerEnv }>();
 // Global middleware
 app.use('*', corsMiddleware);
 app.use('*', authMiddleware);
-app.use('*', rateLimitMiddleware);
+// レート制限は API だけに掛ける。
+// 以前は '*' で、HTML・RSS・画像・クローラーを含む全アクセスが KV に 1 書き込みしていた。
+// 無料枠の書き込みは 1,000/日なので 500 アクセスで警告が来る（2026-09-27 に到達）。
+// サイト本体は Cloudflare のエッジが前段にあり、KV で数える意味がない。
+app.use('/api/*', rateLimitMiddleware);
 
 // Routes
 app.route('/rss', rss);
