@@ -9,6 +9,8 @@ import type { WorkerEnv } from '../types.js';
  *   1. Serve from KV cache if present (key: img:hero:<date>).
  *   2. Otherwise generate a thematic illustration from the day's top tags via
  *      Workers AI (flux-1-schnell), cache it in KV, and serve it.
+ *   3. If generation fails (e.g. the account-wide Workers AI daily quota is used
+ *      up), serve the most recent cached image instead, with a short cache.
  *
  * The image is generated lazily on first view, so it costs nothing on days
  * nobody visits and is free-tier friendly (1 small image / day).
@@ -80,6 +82,43 @@ function base64ToBytes(b64: string): Uint8Array {
 	return bytes;
 }
 
+/**
+ * 生成できなかった日のための代用。直近7日のキャッシュ済み画像を探して返す。
+ * 当日のキーには保存しない（枠が戻ったら改めて生成させるため）。
+ * KV の読み取りだけで済み、書き込み・list は使わない（無料枠の書き込み上限対策）。
+ */
+async function recentCachedImage(kv: KVNamespace, date: string): Promise<ArrayBuffer | null> {
+	const base = new Date(`${date}T00:00:00Z`).getTime();
+	for (let i = 1; i <= 7; i++) {
+		const d = new Date(base - i * 86400 * 1000).toISOString().slice(0, 10);
+		const buf = await kv.get(`${KV_PREFIX}${d}`, 'arrayBuffer');
+		if (buf) return buf;
+	}
+	return null;
+}
+
+/** 生成に失敗したときの応答。代用画像があれば 200、なければ従来どおりのエラー。 */
+async function fallbackOr(
+	c: {
+		env: WorkerEnv;
+		body: (b: ArrayBuffer, s: 200, h: Record<string, string>) => Response;
+		json: (o: unknown, s: 500 | 502 | 503) => Response;
+	},
+	date: string,
+	error: { body: unknown; status: 500 | 502 | 503 },
+): Promise<Response> {
+	const alt = await recentCachedImage(c.env.KV, date);
+	if (alt) {
+		return c.body(alt, 200, {
+			'Content-Type': 'image/jpeg',
+			// 短めにして、枠が戻ったら当日分に置き換わるようにする
+			'Cache-Control': 'public, max-age=900',
+			'X-Hero-Fallback': 'recent',
+		});
+	}
+	return c.json(error.body, error.status);
+}
+
 image.get('/hero/:date', async (c) => {
 	const date = c.req.param('date');
 	if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -107,7 +146,7 @@ image.get('/hero/:date', async (c) => {
 	}
 
 	if (!c.env.AI) {
-		return c.json({ error: 'Image generation unavailable' }, 503);
+		return fallbackOr(c, date, { body: { error: 'Image generation unavailable' }, status: 503 });
 	}
 
 	try {
@@ -122,7 +161,7 @@ image.get('/hero/:date', async (c) => {
 		const prompt = buildPrompt(tags);
 		const result = (await c.env.AI.run(MODEL, { prompt, steps: 4 })) as { image?: string };
 		if (!result?.image) {
-			return c.json({ error: 'Generation failed' }, 502);
+			return fallbackOr(c, date, { body: { error: 'Generation failed' }, status: 502 });
 		}
 
 		const bytes = base64ToBytes(result.image);
@@ -134,7 +173,7 @@ image.get('/hero/:date', async (c) => {
 		});
 	} catch (err) {
 		console.error(`[image] generation failed for ${date}:`, err);
-		return c.json({ error: 'Image generation error' }, 500);
+		return fallbackOr(c, date, { body: { error: 'Image generation error' }, status: 500 });
 	}
 });
 
