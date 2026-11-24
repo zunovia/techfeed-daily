@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { utcDayRange } from '../lib/date-range.js';
 import type { WorkerEnv } from '../types.js';
 
 /**
@@ -101,17 +102,20 @@ async function fetchLatest(db: D1Database): Promise<SiteArticle[]> {
 
 /** Articles collected on a specific UTC date (archive pages). */
 async function fetchByDate(db: D1Database, date: string): Promise<SiteArticle[]> {
+	// date(collected_at) = ? だとインデックスが効かず全件を読む。範囲指定にする（lib/date-range.ts）。
+	const range = utcDayRange(date);
+	if (!range) return [];
 	const { results } = await db
 		.prepare(
 			`SELECT id, source, original_url, title_en, title_ja, summary_ja,
               importance_score, score_reason, tags, author, published_at, collected_at
        FROM articles
        WHERE status = 'published'
-         AND date(collected_at) = ?
+         AND collected_at >= ? AND collected_at < ?
        ORDER BY importance_score DESC
        LIMIT ${DAILY_LIMIT}`,
 		)
-		.bind(date)
+		.bind(range[0], range[1])
 		.all<ArticleRow>();
 	return (results ?? []).map(rowToSiteArticle);
 }
@@ -126,18 +130,45 @@ interface ArchiveDay {
  * Grouped by date(collected_at) — the SAME bucketing used by /d/:date — so every
  * listed day is guaranteed to render a non-empty archive page.
  */
-async function fetchArchiveDates(db: D1Database): Promise<ArchiveDay[]> {
+async function queryArchiveDates(db: D1Database): Promise<ArchiveDay[]> {
+	// 一覧は直近 120 日分なので、150 日より前は読まない（全期間の集計を避ける）。
 	const { results } = await db
 		.prepare(
 			`SELECT date(collected_at) AS date, COUNT(*) AS count
        FROM articles
        WHERE status = 'published'
+         AND collected_at >= date('now', '-150 days')
        GROUP BY date(collected_at)
        ORDER BY date(collected_at) DESC
        LIMIT 120`,
 		)
 		.all<ArchiveDay>();
 	return (results ?? []).filter((r) => typeof r.date === 'string' && r.date.length === 10);
+}
+
+// アーカイブと sitemap の日付一覧。集計はどう書いても対象の行を全部数えるので（約 1.4 万行）、
+// 結果を KV に 1 時間置き、D1 の集計は 1 時間に 1 回までにする（D1 無料枠: 1 日 500 万行）。
+// KV の書き込みも 1 日 24 回までで、無料枠（1,000 回/日）に収まる。
+const ARCHIVE_KV_KEY = 'site:archive-dates';
+const ARCHIVE_KV_TTL = 60 * 60;
+
+async function fetchArchiveDates(env: WorkerEnv): Promise<ArchiveDay[]> {
+	try {
+		const cached = await env.KV.get<ArchiveDay[]>(ARCHIVE_KV_KEY, 'json');
+		if (Array.isArray(cached)) return cached;
+	} catch (err) {
+		console.error('[site] archive cache read failed:', err);
+	}
+	const days = await queryArchiveDates(env.DB);
+	// 空の結果は置かない（集計の失敗や一時的な空で 1 時間空のままになるのを防ぐ）
+	if (days.length > 0) {
+		try {
+			await env.KV.put(ARCHIVE_KV_KEY, JSON.stringify(days), { expirationTtl: ARCHIVE_KV_TTL });
+		} catch (err) {
+			console.error('[site] archive cache write failed:', err);
+		}
+	}
+	return days;
 }
 
 // ---------------------------------------------------------------------------
@@ -581,7 +612,7 @@ site.get('/', async (c) => {
 /** GET /archive — index of all days that have articles. */
 site.get('/archive', async (c) => {
 	try {
-		const dates = await fetchArchiveDates(c.env.DB);
+		const dates = await fetchArchiveDates(c.env);
 		return c.html(renderArchivePage(dates));
 	} catch (err) {
 		console.error('[site] failed to render archive:', err);
@@ -615,7 +646,7 @@ site.get('/robots.txt', (c) => {
 site.get('/sitemap.xml', async (c) => {
 	let days: ArchiveDay[] = [];
 	try {
-		days = await fetchArchiveDates(c.env.DB);
+		days = await fetchArchiveDates(c.env);
 	} catch (err) {
 		console.error('[site] sitemap: failed to fetch dates:', err);
 	}

@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { utcDayRange } from '../lib/date-range.js';
 import type { WorkerEnv } from '../types.js';
 
 /**
@@ -32,17 +33,26 @@ const MIN_DATE = '2026-05-01';
 async function fetchThemeTags(db: D1Database, date: string): Promise<string[]> {
 	const todayJst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 	const isToday = date === todayJst;
-	const where = isToday ? "collected_at >= datetime('now', '-24 hours')" : 'date(collected_at) = ?';
+	// 過去の日付は範囲指定にする（date(collected_at) = ? はインデックスが効かず全件を読む）
+	const range = isToday ? null : utcDayRange(date);
+	if (!isToday && !range) return [];
+	const where = isToday
+		? "collected_at >= datetime('now', '-24 hours')"
+		: 'collected_at >= ? AND collected_at < ?';
 	const stmt = db.prepare(
 		`SELECT tags FROM articles
      WHERE status = 'published' AND ${where}
      ORDER BY importance_score DESC LIMIT 8`,
 	);
-	const bound = isToday ? stmt : stmt.bind(date);
+	const bound = range ? stmt.bind(range[0], range[1]) : stmt;
 	const { results } = await bound.all<{ tags: string | null }>();
+	return topTags(results ?? []);
+}
 
+/** 記事のタグ（JSON 配列の文字列）を数え、多い順に 4 つ返す。 */
+function topTags(rows: { tags: string | null }[]): string[] {
 	const counts = new Map<string, number>();
-	for (const row of results ?? []) {
+	for (const row of rows) {
 		if (!row.tags) continue;
 		try {
 			const parsed = JSON.parse(row.tags) as unknown;
